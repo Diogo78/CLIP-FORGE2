@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLIPE FORGE — teste</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D0B;
+    --surface:#121814;
+    --surface2:#171F19;
+    --border:#22302A;
+    --green:#3DDC84;
+    --green-dim:#1F5E3C;
+    --text:#EAF2EC;
+    --text-dim:#8FA396;
+    --text-faint:#5C6B62;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:20px 18px 60px;}
+
+  header.top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px;}
+  header.top .logo{font-size:20px;font-weight:700;letter-spacing:-0.02em;}
+  header.top .logo span{color:var(--green);}
+  header.top .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);}
+
+  nav.tabs{display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid var(--border);}
+  nav.tabs button{
+    flex:1;background:none;border:none;color:var(--text-dim);
+    font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:500;
+    padding:12px 4px;cursor:pointer;position:relative;
+  }
+  nav.tabs button.active{color:var(--text);}
+  nav.tabs button.active::after{
+    content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--green);
+  }
+
+  .screen{display:none;}
+  .screen.active{display:block;}
+
+  h1.title{font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em;}
+  p.sub{font-size:14px;color:var(--text-dim);margin:0 0 22px;line-height:1.5;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;}
+
+  label.field-label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:8px;font-family:'JetBrains Mono',monospace;}
+
+  .dropzone{
+    border:1px dashed var(--border);border-radius:8px;
+    padding:28px 12px;text-align:center;cursor:pointer;
+    background:var(--surface2);transition:border-color .15s;
+  }
+  .dropzone:hover{border-color:var(--green-dim);}
+  .dropzone.has-file{border-color:var(--green);border-style:solid;}
+  .dropzone p{margin:6px 0 0;font-size:13px;color:var(--text-dim);}
+  .dropzone .fname{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;}
+
+  textarea, input[type=text]{
+    width:100%;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;
+    font-size:14px;padding:10px 12px;resize:vertical;
+  }
+  textarea{min-height:70px;}
+  textarea:focus,input:focus{outline:none;border-color:var(--green-dim);}
+
+  button.primary{
+    width:100%;background:var(--green);color:#06120C;border:none;
+    border-radius:8px;padding:13px;font-family:'Space Grotesk',sans-serif;
+    font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;
+  }
+  button.primary:active{transform:scale(0.99);}
+  button.primary:disabled{background:var(--green-dim);color:var(--text-faint);cursor:default;}
+
+  .loading{display:none;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--green);padding:16px 0;text-align:center;}
+  .loading.show{display:block;}
+
+  .results{display:none;margin-top:18px;}
+  .results.show{display:block;}
+
+  .result-block{margin-bottom:18px;}
+  .result-block .label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+  .hook-item{
+    background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;font-size:14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;
+  }
+  .hook-item .score{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);white-space:nowrap;}
+  .cta-box{background:var(--surface2);border:1px solid var(--green-dim);border-radius:8px;padding:10px 12px;font-size:14px;}
+  .hashtags{display:flex;flex-wrap:wrap;gap:6px;}
+  .hashtags span{
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--green);
+    background:rgba(61,220,132,0.08);border:1px solid var(--green-dim);
+    border-radius:20px;padding:4px 10px;
+  }
+
+  .clip-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;
+  }
+  .clip-row:last-child{border-bottom:none;}
+  .clip-row .t{font-family:'JetBrains Mono',monospace;color:var(--text-dim);}
+  .clip-row .why{color:var(--text-dim);font-size:12px;}
+  .clip-row .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);}
+
+  .note{font-size:12px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">CLIPE <span>FORGE</span></div>
+    <div class="tag">v0.1 — teste</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="active" data-screen="analise">análise de clipes</button>
+    <button data-screen="corte">cortar vídeo longo</button>
+  </nav>
+
+  <!-- TELA 1 -->
+  <section class="screen active" id="analise">
+    <h1 class="title">análise de clipes</h1>
+    <p class="sub">envie um clipe pronto e receba hook, cta e hashtags sugeridos.</p>
+
+    <div class="card">
+      <label class="field-label">clipe</label>
+      <div class="dropzone" id="dropzone1">
+        <div id="dz1-text">
+          <p><strong style="color:var(--text)">toque para enviar</strong></p>
+          <p>mp4 · até 60s</p>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept="video/*" style="display:none">
+
+      <div style="margin-top:14px;">
+        <label class="field-label">contexto (opcional)</label>
+        <textarea id="contextInput" placeholder="ex: clutch no valorant, reação do streamer"></textarea>
+      </div>
+
+      <button class="primary" id="analyzeBtn">analisar clipe</button>
+      <div class="loading" id="loading1">analisando cena e transcrição...</div>
+    </div>
+
+    <div class="results" id="results1">
+      <div class="result-block">
+        <div class="label">hooks sugeridos</div>
+        <div id="hookList"></div>
+      </div>
+      <div class="result-block">
+        <div class="label">cta sugerido</div>
+        <div class="cta-box" id="ctaBox"></div>
+      </div>
+      <div class="result-block">
+        <div class="label">hashtags</div>
+        <div class="hashtags" id="hashtagList"></div>
+      </div>
+      <p class="note">versão de teste: hooks gerados por heurística local a partir do contexto digitado. a versão final vai transcrever o áudio de verdade e usar IA pra analisar a cena.</p>
+    </div>
+  </section>
+
+  <!-- TELA 2 -->
+  <section class="screen" id="corte">
+    <h1 class="title">cortar vídeo longo</h1>
+    <p class="sub">cole o link do youtube e receba sugestões de corte de 30 a 60 segundos.</p>
+
+    <div class="card">
+      <label class="field-label">link do youtube</label>
+      <input type="text" id="ytLink" placeholder="https://youtube.com/watch?v=...">
+      <p class="note" style="margin-top:8px;">os clipes são gerados automaticamente entre 45 e 60 segundos.</p>
+
+      <button class="primary" id="cutBtn">detectar cortes</button>
+      <div class="loading" id="loading2">baixando e analisando o vídeo...</div>
+    </div>
+
+    <div class="results" id="results2">
+      <div class="result-block">
+        <div class="label">momentos detectados</div>
+        <div id="clipList"></div>
+      </div>
+      <p class="note">versão de teste: timestamps simulados. a versão final vai transcrever o vídeo inteiro e detectar picos de energia + trechos relevantes de verdade.</p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.screen).classList.add('active');
+    });
+  });
+
+  const dz1=document.getElementById('dropzone1');
+  const fileInput=document.getElementById('fileInput');
+  const dz1text=document.getElementById('dz1-text');
+  dz1.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',()=>{
+    if(fileInput.files.length){
+      dz1.classList.add('has-file');
+      dz1text.innerHTML='<p class="fname">'+fileInput.files[0].name+'</p><p>toque para trocar</p>';
+    }
+  });
+
+  function pickHooks(context){
+    const c=(context||'').toLowerCase();
+    const bank=[];
+    if(c.includes('clutch')||c.includes('valorant')||c.includes('cs')){
+      bank.push('ele não devia ter feito isso','1 vida, round inteiro','quase perdeu por causa disso');
+    } else if(c.includes('reação')||c.includes('reacao')){
+      bank.push('a reação dele fala tudo','ninguém esperava essa reação','olha a cara dele nessa hora');
+    } else {
+      bank.push('ninguém esperava essa call','isso não devia ter acontecido','presta atenção no final');
+    }
+    bank.push('a comunidade não perdoou essa');
+    return bank.slice(0,3);
+  }
+
+  document.getElementById('analyzeBtn').addEventListener('click',()=>{
+    const err=document.getElementById('fileErr');
+    if(!fileInput.files.length){
+      if(!err){
+        const e=document.createElement('div');
+        e.id='fileErr';
+        e.style.cssText='color:#E24B4A;font-size:12px;margin-top:8px;font-family:JetBrains Mono,monospace;';
+        e.textContent='envie um clipe antes de analisar.';
+        dz1.insertAdjacentElement('afterend',e);
+      }
+      return;
+    }
+    if(err) err.remove();
+
+    document.getElementById('loading1').classList.add('show');
+    document.getElementById('results1').classList.remove('show');
+
+    setTimeout(()=>{
+      document.getElementById('loading1').classList.remove('show');
+      const hooks=pickHooks(document.getElementById('contextInput').value);
+      const hookList=document.getElementById('hookList');
+      hookList.innerHTML='';
+      const scores=[92,87,81];
+      hooks.forEach((h,i)=>{
+        const d=document.createElement('div');
+        d.className='hook-item';
+        d.innerHTML='<span>'+h+'</span><span class="score">'+scores[i]+'%</span>';
+        hookList.appendChild(d);
+      });
+      document.getElementById('ctaBox').textContent='segue pra ver mais clipe assim';
+      const tags=['#esports','#clutch','#gaming','#invoxgg','#streamerbrasil'];
+      const tagWrap=document.getElementById('hashtagList');
+      tagWrap.innerHTML='';
+      tags.forEach(t=>{
+        const s=document.createElement('span');
+        s.textContent=t;
+        tagWrap.appendChild(s);
+      });
+      document.getElementById('results1').classList.add('show');
+    },900);
+  });
+
+  function formatarTempo(segundos){
+    const m=Math.floor(segundos/60);
+    const s=Math.floor(segundos%60);
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  }
+
+  document.getElementById('cutBtn').addEventListener('click',async()=>{
+    const link=document.getElementById('ytLink');
+    const err=document.getElementById('ytErr');
+    if(!link.value.trim()){
+      if(!err){
+        const e=document.createElement('div');
+        e.id='ytErr';
+        e.style.cssText='color:#E24B4A;font-size:12px;margin-top:8px;font-family:JetBrains Mono,monospace;';
+        e.textContent='cole um link antes de detectar os cortes.';
+        link.insertAdjacentElement('afterend',e);
+      }
+      return;
+    }
+    if(err) err.remove();
+
+    const loading=document.getElementById('loading2');
+    const results=document.getElementById('results2');
+    const btn=document.getElementById('cutBtn');
+    loading.textContent='baixando, transcrevendo e cortando... isso pode levar alguns minutos';
+    loading.classList.add('show');
+    results.classList.remove('show');
+    btn.disabled=true;
+
+    try{
+      const resp=await fetch('/api/cortar',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:link.value.trim()})
+      });
+      if(!resp.ok){
+        const dados=await resp.json().catch(()=>({}));
+        throw new Error(dados.detail||'erro ao processar o vídeo');
+      }
+      const dados=await resp.json();
+
+      const list=document.getElementById('clipList');
+      list.innerHTML='';
+      dados.clipes.forEach(c=>{
+        const row=document.createElement('div');
+        row.className='clip-row';
+        row.innerHTML=
+          '<div><div class="t">'+formatarTempo(c.inicio)+' — '+formatarTempo(c.fim)+'</div>'+
+          '<div class="why">'+c.trecho_falado+'</div></div>'+
+          '<div style="text-align:right;"><div class="tag">score '+c.score+'</div>'+
+          '<a href="'+c.url_download+'" download style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--green);">baixar</a></div>';
+        list.appendChild(row);
+      });
+      results.classList.add('show');
+    }catch(e){
+      loading.textContent='erro: '+e.message;
+      loading.style.color='#E24B4A';
+      setTimeout(()=>{loading.style.color='';},4000);
+      return;
+    }finally{
+      loading.classList.remove('show');
+      btn.disabled=false;
+    }
+  });
+</script>
+</body>
+</html>
