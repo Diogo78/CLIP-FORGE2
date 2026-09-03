@@ -275,6 +275,8 @@
     return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
 
+  function aguardar(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
   document.getElementById('cutBtn').addEventListener('click',async()=>{
     const link=document.getElementById('ytLink');
     const err=document.getElementById('ytErr');
@@ -293,10 +295,18 @@
     const loading=document.getElementById('loading2');
     const results=document.getElementById('results2');
     const btn=document.getElementById('cutBtn');
-    loading.textContent='baixando, transcrevendo e cortando... isso pode levar alguns minutos';
+
+    loading.style.color='';
+    loading.textContent='enviando o link...';
     loading.classList.add('show');
     results.classList.remove('show');
     btn.disabled=true;
+
+    let segundosPassados=0;
+    const relogio=setInterval(()=>{
+      segundosPassados+=1;
+      loading.textContent='baixando, transcrevendo e cortando... ('+segundosPassados+'s, pode levar alguns minutos)';
+    },1000);
 
     try{
       const resp=await fetch('/api/cortar',{
@@ -306,13 +316,33 @@
       });
       if(!resp.ok){
         const dados=await resp.json().catch(()=>({}));
-        throw new Error(dados.detail||'erro ao processar o vídeo');
+        throw new Error(dados.detail||('erro ao iniciar (HTTP '+resp.status+')'));
       }
-      const dados=await resp.json();
+      const {job_id}=await resp.json();
+
+      let dadosFinais=null;
+      while(true){
+        await aguardar(4000);
+        const statusResp=await fetch('/api/status/'+job_id);
+        if(!statusResp.ok){
+          throw new Error('erro ao consultar o status (HTTP '+statusResp.status+')');
+        }
+        const statusDados=await statusResp.json();
+        if(statusDados.status==='concluido'){
+          dadosFinais=statusDados;
+          break;
+        }
+        if(statusDados.status==='erro'){
+          throw new Error(statusDados.erro||'erro desconhecido no processamento');
+        }
+        // status ainda "processando" -> continua o loop
+      }
+
+      clearInterval(relogio);
 
       const list=document.getElementById('clipList');
       list.innerHTML='';
-      dados.clipes.forEach(c=>{
+      dadosFinais.clipes.forEach(c=>{
         const row=document.createElement('div');
         row.className='clip-row';
         row.innerHTML=
@@ -323,13 +353,17 @@
         list.appendChild(row);
       });
       results.classList.add('show');
+      loading.classList.remove('show');
     }catch(e){
+      clearInterval(relogio);
       loading.textContent='erro: '+e.message;
       loading.style.color='#E24B4A';
-      setTimeout(()=>{loading.style.color='';},4000);
-      return;
+      // fica visivel por mais tempo, nao some na hora
+      setTimeout(()=>{
+        loading.classList.remove('show');
+        loading.style.color='';
+      },8000);
     }finally{
-      loading.classList.remove('show');
       btn.disabled=false;
     }
   });
