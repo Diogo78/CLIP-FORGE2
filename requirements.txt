@@ -2,6 +2,7 @@ fastapi
 uvicorn
 python-multipart
 yt-dlp
+yt-dlp-ejs
 faster-whisper
 opencv-python-headless
 numpy
