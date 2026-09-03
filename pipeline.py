@@ -48,6 +48,7 @@ def baixar_video(url: str) -> str:
         "yt-dlp",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
+        "--extractor-args", "youtube:player_client=android,web",
         "-o", saida,
     ]
     if os.path.exists("cookies.txt"):
