@@ -124,6 +124,7 @@
   <nav class="tabs">
     <button class="active" data-screen="analise">análise de clipes</button>
     <button data-screen="corte">cortar vídeo longo</button>
+    <button data-screen="upload">enviar arquivo</button>
   </nav>
 
   <!-- TELA 1 -->
@@ -187,6 +188,35 @@
         <div id="clipList"></div>
       </div>
       <p class="note">versão de teste: timestamps simulados. a versão final vai transcrever o vídeo inteiro e detectar picos de energia + trechos relevantes de verdade.</p>
+    </div>
+  </section>
+
+  <!-- TELA 3 -->
+  <section class="screen" id="upload">
+    <h1 class="title">enviar arquivo</h1>
+    <p class="sub">já tem o vídeo baixado no seu computador? envie o arquivo direto pro corte, sem depender do link do youtube.</p>
+
+    <div class="card">
+      <label class="field-label">vídeo longo</label>
+      <div class="dropzone" id="dropzone3">
+        <div id="dz3-text">
+          <p><strong style="color:var(--text)">toque para enviar</strong></p>
+          <p>mp4, mov, mkv, avi ou webm</p>
+        </div>
+      </div>
+      <input type="file" id="uploadFileInput" accept=".mp4,.mov,.mkv,.avi,.webm" style="display:none">
+      <p class="note" style="margin-top:8px;">os clipes são gerados automaticamente entre 45 e 60 segundos.</p>
+
+      <button class="primary" id="uploadCutBtn">detectar cortes</button>
+      <div class="loading" id="loading3">enviando o arquivo...</div>
+    </div>
+
+    <div class="results" id="results3">
+      <div class="result-block">
+        <div class="label">momentos detectados</div>
+        <div id="uploadClipList"></div>
+      </div>
+      <p class="note">os arquivos enviados são apagados do servidor assim que o corte termina.</p>
     </div>
   </section>
 
@@ -277,6 +307,60 @@
 
   function aguardar(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
+  function renderizarClipRows(container,clipes){
+    container.innerHTML='';
+    clipes.forEach(c=>{
+      const row=document.createElement('div');
+      row.className='clip-row';
+      row.innerHTML=
+        '<div><div class="t">'+formatarTempo(c.inicio)+' — '+formatarTempo(c.fim)+'</div>'+
+        '<div class="why">'+c.trecho_falado+'</div></div>'+
+        '<div style="text-align:right;"><div class="tag">score '+c.score+'</div>'+
+        '<a href="'+c.url_download+'" download style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--green);">baixar</a></div>';
+      container.appendChild(row);
+    });
+  }
+
+  async function acompanharJobECorte({jobId, loadingEl, resultsEl, listEl, btnEl, mensagemInicial}){
+    let segundosPassados=0;
+    loadingEl.textContent=mensagemInicial;
+    const relogio=setInterval(()=>{
+      segundosPassados+=1;
+      loadingEl.textContent='processando... ('+segundosPassados+'s, pode levar alguns minutos)';
+    },1000);
+
+    try{
+      while(true){
+        await aguardar(4000);
+        const statusResp=await fetch('/api/status/'+jobId);
+        if(!statusResp.ok){
+          throw new Error('erro ao consultar o status (HTTP '+statusResp.status+')');
+        }
+        const statusDados=await statusResp.json();
+        if(statusDados.status==='concluido'){
+          clearInterval(relogio);
+          renderizarClipRows(listEl,statusDados.clipes);
+          resultsEl.classList.add('show');
+          loadingEl.classList.remove('show');
+          return;
+        }
+        if(statusDados.status==='erro'){
+          throw new Error(statusDados.erro||'erro desconhecido no processamento');
+        }
+      }
+    }catch(e){
+      clearInterval(relogio);
+      loadingEl.textContent='erro: '+e.message;
+      loadingEl.style.color='#E24B4A';
+      setTimeout(()=>{
+        loadingEl.classList.remove('show');
+        loadingEl.style.color='';
+      },8000);
+    }finally{
+      btnEl.disabled=false;
+    }
+  }
+
   document.getElementById('cutBtn').addEventListener('click',async()=>{
     const link=document.getElementById('ytLink');
     const err=document.getElementById('ytErr');
@@ -297,16 +381,9 @@
     const btn=document.getElementById('cutBtn');
 
     loading.style.color='';
-    loading.textContent='enviando o link...';
     loading.classList.add('show');
     results.classList.remove('show');
     btn.disabled=true;
-
-    let segundosPassados=0;
-    const relogio=setInterval(()=>{
-      segundosPassados+=1;
-      loading.textContent='baixando, transcrevendo e cortando... ('+segundosPassados+'s, pode levar alguns minutos)';
-    },1000);
 
     try{
       const resp=await fetch('/api/cortar',{
@@ -319,51 +396,99 @@
         throw new Error(dados.detail||('erro ao iniciar (HTTP '+resp.status+')'));
       }
       const {job_id}=await resp.json();
-
-      let dadosFinais=null;
-      while(true){
-        await aguardar(4000);
-        const statusResp=await fetch('/api/status/'+job_id);
-        if(!statusResp.ok){
-          throw new Error('erro ao consultar o status (HTTP '+statusResp.status+')');
-        }
-        const statusDados=await statusResp.json();
-        if(statusDados.status==='concluido'){
-          dadosFinais=statusDados;
-          break;
-        }
-        if(statusDados.status==='erro'){
-          throw new Error(statusDados.erro||'erro desconhecido no processamento');
-        }
-        // status ainda "processando" -> continua o loop
-      }
-
-      clearInterval(relogio);
-
-      const list=document.getElementById('clipList');
-      list.innerHTML='';
-      dadosFinais.clipes.forEach(c=>{
-        const row=document.createElement('div');
-        row.className='clip-row';
-        row.innerHTML=
-          '<div><div class="t">'+formatarTempo(c.inicio)+' — '+formatarTempo(c.fim)+'</div>'+
-          '<div class="why">'+c.trecho_falado+'</div></div>'+
-          '<div style="text-align:right;"><div class="tag">score '+c.score+'</div>'+
-          '<a href="'+c.url_download+'" download style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--green);">baixar</a></div>';
-        list.appendChild(row);
+      await acompanharJobECorte({
+        jobId:job_id,
+        loadingEl:loading,
+        resultsEl:results,
+        listEl:document.getElementById('clipList'),
+        btnEl:btn,
+        mensagemInicial:'baixando, transcrevendo e cortando...'
       });
-      results.classList.add('show');
-      loading.classList.remove('show');
     }catch(e){
-      clearInterval(relogio);
       loading.textContent='erro: '+e.message;
       loading.style.color='#E24B4A';
-      // fica visivel por mais tempo, nao some na hora
       setTimeout(()=>{
         loading.classList.remove('show');
         loading.style.color='';
       },8000);
-    }finally{
+      btn.disabled=false;
+    }
+  });
+
+  // ---------- TELA 3: enviar arquivo ----------
+  const dz3=document.getElementById('dropzone3');
+  const uploadFileInput=document.getElementById('uploadFileInput');
+  const dz3text=document.getElementById('dz3-text');
+  dz3.addEventListener('click',()=>uploadFileInput.click());
+
+  ['dragenter','dragover'].forEach(evento=>{
+    dz3.addEventListener(evento,e=>{ e.preventDefault(); dz3.classList.add('has-file'); });
+  });
+  dz3.addEventListener('dragleave',()=>{
+    if(!uploadFileInput.files.length) dz3.classList.remove('has-file');
+  });
+  dz3.addEventListener('drop',e=>{
+    e.preventDefault();
+    if(e.dataTransfer.files.length){
+      uploadFileInput.files=e.dataTransfer.files;
+      uploadFileInput.dispatchEvent(new Event('change'));
+    }
+  });
+  uploadFileInput.addEventListener('change',()=>{
+    if(uploadFileInput.files.length){
+      dz3.classList.add('has-file');
+      dz3text.innerHTML='<p class="fname">'+uploadFileInput.files[0].name+'</p><p>toque para trocar</p>';
+    }
+  });
+
+  document.getElementById('uploadCutBtn').addEventListener('click',async()=>{
+    const err=document.getElementById('uploadErr');
+    if(!uploadFileInput.files.length){
+      if(!err){
+        const e=document.createElement('div');
+        e.id='uploadErr';
+        e.style.cssText='color:#E24B4A;font-size:12px;margin-top:8px;font-family:JetBrains Mono,monospace;';
+        e.textContent='envie um arquivo de vídeo antes de detectar os cortes.';
+        dz3.insertAdjacentElement('afterend',e);
+      }
+      return;
+    }
+    if(err) err.remove();
+
+    const loading=document.getElementById('loading3');
+    const results=document.getElementById('results3');
+    const btn=document.getElementById('uploadCutBtn');
+
+    loading.style.color='';
+    loading.classList.add('show');
+    results.classList.remove('show');
+    btn.disabled=true;
+
+    const formData=new FormData();
+    formData.append('arquivo',uploadFileInput.files[0]);
+
+    try{
+      const resp=await fetch('/api/cortar-upload',{ method:'POST', body:formData });
+      if(!resp.ok){
+        const dados=await resp.json().catch(()=>({}));
+        throw new Error(dados.detail||('erro ao enviar o arquivo (HTTP '+resp.status+')'));
+      }
+      const {job_id}=await resp.json();
+      await acompanharJobECorte({
+        jobId:job_id,
+        loadingEl:loading,
+        resultsEl:results,
+        listEl:document.getElementById('uploadClipList'),
+        btnEl:btn,
+        mensagemInicial:'transcrevendo e cortando...'
+      });
+    }catch(e){
+      loading.textContent='erro: '+e.message;
+      loading.style.color='#E24B4A';
+      setTimeout(()=>{
+        loading.classList.remove('show');
+        loading.style.color='';
+      },8000);
       btn.disabled=false;
     }
   });
