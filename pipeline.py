@@ -266,6 +266,7 @@ def processar_video_local(video_path: str, pasta_saida: str) -> list[dict]:
     pelo yt-dlp.
     """
     os.makedirs(pasta_saida, exist_ok=True)
+    os.makedirs(WORK_DIR, exist_ok=True)
 
     segmentos = transcrever(video_path)
     janelas = selecionar_janelas(segmentos)
