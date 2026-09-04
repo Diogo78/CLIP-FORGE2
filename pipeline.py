@@ -227,11 +227,17 @@ def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, past
     nome_arquivo = f"clipe_{indice:02d}.mp4"
     saida = os.path.join(pasta_saida, nome_arquivo)
 
+    # 720x1280 em vez de 1080x1920: menos memoria pro encoder,
+    # ainda fica nitido o suficiente pra reels/shorts/tiktok
     crop_filter = (
         f"crop=ih*9/16:ih:(iw-ih*9/16)*{centro_x}:0,"
-        f"scale=1080:1920,"
+        f"scale=720:1280,"
         f"ass={ass_path}"
     )
+
+    # libera qualquer coisa que a deteccao de rosto (opencv/numpy)
+    # ainda esteja segurando na RAM antes de chamar o ffmpeg
+    gc.collect()
 
     subprocess.run(
         [
@@ -240,7 +246,10 @@ def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, past
             "-i", video_path,
             "-t", str(duracao),
             "-vf", crop_filter,
-            "-c:v", "libx264", "-c:a", "aac",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",  # usa bem menos RAM (e CPU) que o preset padrao "medium"
+            "-threads", "1",         # evita varios buffers de encoding abertos ao mesmo tempo
+            "-c:a", "aac",
             saida,
         ],
         check=True,
