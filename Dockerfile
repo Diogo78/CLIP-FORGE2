@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 # ffmpeg é necessário pro corte, reenquadramento e legenda dos clipes
 # as libs abaixo são dependências do opencv que costumam faltar em imagens slim
+# curl+unzip são pra instalar o deno (runtime JS que o yt-dlp usa pra decifrar o YouTube)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1 \
@@ -9,12 +10,20 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender1 \
+    curl \
+    unzip \
+    && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# baixa o modelo "tiny" do faster-whisper AGORA, durante o build,
+# e deixa ele guardado dentro da propria imagem -- assim o container
+# nao precisa baixar nada da Hugging Face toda vez que reinicia
+RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
 
 COPY . .
 
