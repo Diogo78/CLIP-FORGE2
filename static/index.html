@@ -134,6 +134,17 @@
   .btn-copiar:hover{background:rgba(61,220,132,0.08);}
   .btn-copiar.copiado{border-color:var(--green);color:var(--text);}
 
+  .toggle-legenda{
+    display:flex;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:3px;margin:14px 0;
+  }
+  .toggle-legenda button{
+    flex:1;background:none;border:none;color:var(--text-dim);
+    font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;
+    padding:8px;border-radius:6px;cursor:pointer;
+  }
+  .toggle-legenda button.selecionado{background:var(--green);color:#06120C;font-weight:700;}
+
   .note{font-size:12px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
 </style>
 </head>
@@ -202,6 +213,11 @@
       <input type="text" id="ytLink" placeholder="https://youtube.com/watch?v=...">
       <p class="note" style="margin-top:8px;">os clipes são gerados automaticamente entre 45 e 60 segundos.</p>
 
+      <div class="toggle-legenda" id="toggleLegenda2">
+        <button type="button" class="selecionado" data-valor="1">com legenda</button>
+        <button type="button" data-valor="0">sem legenda</button>
+      </div>
+
       <button class="primary" id="cutBtn">detectar cortes</button>
       <div class="loading" id="loading2">baixando e analisando o vídeo...</div>
     </div>
@@ -231,6 +247,11 @@
       <input type="file" id="uploadFileInput" accept=".mp4,.mov,.mkv,.avi,.webm" style="display:none">
       <p class="note" style="margin-top:8px;">os clipes são gerados automaticamente entre 45 e 60 segundos.</p>
 
+      <div class="toggle-legenda" id="toggleLegenda3">
+        <button type="button" class="selecionado" data-valor="1">com legenda</button>
+        <button type="button" data-valor="0">sem legenda</button>
+      </div>
+
       <button class="primary" id="uploadCutBtn">detectar cortes</button>
       <div class="loading" id="loading3">enviando o arquivo...</div>
     </div>
@@ -247,6 +268,21 @@
 </div>
 
 <script>
+  function configurarToggleLegenda(elId){
+    const toggle=document.getElementById(elId);
+    const botoes=toggle.querySelectorAll('button');
+    botoes.forEach(b=>{
+      b.addEventListener('click',()=>{
+        botoes.forEach(x=>x.classList.remove('selecionado'));
+        b.classList.add('selecionado');
+      });
+    });
+    return ()=> toggle.querySelector('button.selecionado').dataset.valor==='1';
+  }
+
+  const comLegendaLink=configurarToggleLegenda('toggleLegenda2');
+  const comLegendaUpload=configurarToggleLegenda('toggleLegenda3');
+
   document.querySelectorAll('nav.tabs button').forEach(btn=>{
     btn.addEventListener('click',()=>{
       document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
@@ -443,7 +479,7 @@
       const resp=await fetch('/api/cortar',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:link.value.trim()})
+        body:JSON.stringify({url:link.value.trim(), com_legenda:comLegendaLink()})
       });
       if(!resp.ok){
         const dados=await resp.json().catch(()=>({}));
@@ -520,6 +556,7 @@
 
     const formData=new FormData();
     formData.append('arquivo',uploadFileInput.files[0]);
+    formData.append('com_legenda',comLegendaUpload()?'true':'false');
 
     try{
       const resp=await fetch('/api/cortar-upload',{ method:'POST', body:formData });

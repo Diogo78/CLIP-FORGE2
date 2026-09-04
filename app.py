@@ -28,7 +28,7 @@ import threading
 import traceback
 import uuid
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -54,6 +54,7 @@ LOCK_PROCESSAMENTO = threading.Lock()
 
 class CortarRequest(BaseModel):
     url: str
+    com_legenda: bool = True
 
 
 @app.get("/")
@@ -61,11 +62,11 @@ def home():
     return FileResponse("static/index.html")
 
 
-def _rodar_pipeline_em_segundo_plano(job_id: str, url: str):
+def _rodar_pipeline_em_segundo_plano(job_id: str, url: str, com_legenda: bool):
     pasta_lote = os.path.join(CLIPES_DIR, job_id)
     with LOCK_PROCESSAMENTO:
         try:
-            clipes = processar_video(url, pasta_lote)
+            clipes = processar_video(url, pasta_lote, com_legenda)
             for c in clipes:
                 c["url_download"] = f"/clipes/{job_id}/{c['arquivo']}"
             JOBS[job_id] = {"status": "concluido", "clipes": clipes}
@@ -73,11 +74,11 @@ def _rodar_pipeline_em_segundo_plano(job_id: str, url: str):
             JOBS[job_id] = {"status": "erro", "erro": traceback.format_exc(limit=3)}
 
 
-def _rodar_pipeline_local_em_segundo_plano(job_id: str, video_path: str):
+def _rodar_pipeline_local_em_segundo_plano(job_id: str, video_path: str, com_legenda: bool):
     pasta_lote = os.path.join(CLIPES_DIR, job_id)
     with LOCK_PROCESSAMENTO:
         try:
-            clipes = processar_video_local(video_path, pasta_lote)
+            clipes = processar_video_local(video_path, pasta_lote, com_legenda)
             for c in clipes:
                 c["url_download"] = f"/clipes/{job_id}/{c['arquivo']}"
             JOBS[job_id] = {"status": "concluido", "clipes": clipes}
@@ -102,7 +103,7 @@ def cortar(req: CortarRequest):
 
     thread = threading.Thread(
         target=_rodar_pipeline_em_segundo_plano,
-        args=(job_id, req.url.strip()),
+        args=(job_id, req.url.strip(), req.com_legenda),
         daemon=True,
     )
     thread.start()
@@ -111,7 +112,7 @@ def cortar(req: CortarRequest):
 
 
 @app.post("/api/cortar-upload")
-async def cortar_upload(arquivo: UploadFile = File(...)):
+async def cortar_upload(arquivo: UploadFile = File(...), com_legenda: bool = Form(True)):
     """Dispara o processamento em segundo plano a partir de um arquivo de video enviado direto."""
     extensoes_validas = (".mp4", ".mov", ".mkv", ".avi", ".webm")
     if not arquivo.filename.lower().endswith(extensoes_validas):
@@ -127,7 +128,7 @@ async def cortar_upload(arquivo: UploadFile = File(...)):
 
     thread = threading.Thread(
         target=_rodar_pipeline_local_em_segundo_plano,
-        args=(job_id, caminho_upload),
+        args=(job_id, caminho_upload, com_legenda),
         daemon=True,
     )
     thread.start()

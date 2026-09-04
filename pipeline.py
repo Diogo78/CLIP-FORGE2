@@ -7,6 +7,7 @@ chamada pelo backend do site (app.py) em vez de rodar por linha de comando.
 
 import gc
 import os
+import random
 import subprocess
 
 import numpy as np
@@ -33,29 +34,47 @@ PALAVRAS_GATILHO = [
 ]
 
 # banco de hooks por categoria -- a categoria e escolhida por
-# palavras-chave encontradas no texto REAL transcrito do clipe
+# palavras-chave encontradas no texto REAL transcrito do clipe.
+# cada clipe sorteia um hook e um cta diferentes dentro da categoria,
+# pra nao repetir sempre a mesma frase.
 HOOKS_POR_CATEGORIA = {
     "risada": [
         "ninguem estava pronto pra isso",
-        "eu ri igual um retardado",
+        "eu chorei de rir com isso aqui",
         "olha a cara de quem assistiu",
+        "isso aqui nao tem explicacao",
+        "assiste ate o final que vale a pena",
     ],
     "choque": [
         "ninguem esperava essa reviravolta",
         "isso nao devia ter acontecido",
         "presta atencao no final",
+        "voce nao vai acreditar no que rolou",
+        "isso pegou todo mundo de surpresa",
     ],
     "reacao": [
         "a reacao fala tudo",
         "olha a cara nessa hora",
         "ninguem segurou a risada",
+        "repara na reacao de quem tava do lado",
+        "essa reacao resume tudo",
     ],
     "generico": [
         "voce precisa ver isso ate o final",
         "ninguem tava esperando essa",
         "isso aqui viralizou por um motivo",
+        "guarda esse clipe pra assistir de novo",
+        "manda pra quem precisa ver isso",
     ],
 }
+
+CTAS = [
+    "segue pra ver mais clipe assim",
+    "salva esse clipe pra assistir depois",
+    "comenta o que voce achou",
+    "manda esse clipe pra um amigo",
+    "segue o canal pra nao perder o proximo",
+]
 
 HASHTAGS_PADRAO = ["#cortes", "#viral", "#fyp", "#clipes", "#foryou"]
 
@@ -64,7 +83,8 @@ def gerar_legenda_pronta(texto: str) -> dict:
     """
     Gera hook, cta e hashtags sugeridos a partir do texto REAL
     transcrito do clipe (nao e mais simulado) -- pra deixar o clipe
-    pronto pra postar, so copiar e colar.
+    pronto pra postar, so copiar e colar. Sorteia entre varias opcoes
+    pra nao repetir sempre a mesma frase.
     """
     t = texto.lower()
 
@@ -80,8 +100,8 @@ def gerar_legenda_pronta(texto: str) -> dict:
     hooks = HOOKS_POR_CATEGORIA[categoria]
 
     return {
-        "hook": hooks[0],
-        "cta": "segue pra ver mais clipe assim",
+        "hook": random.choice(hooks),
+        "cta": random.choice(CTAS),
         "hashtags": HASHTAGS_PADRAO,
     }
 
@@ -270,24 +290,22 @@ def gerar_ass_estilo_realoficial(segmentos_janela, inicio_janela: float, caminho
         f.writelines(linhas_eventos)
 
 
-def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, pasta_saida: str) -> str:
+def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, pasta_saida: str, com_legenda: bool = True) -> str:
     inicio, fim = janela["start"], janela["end"]
     duracao = fim - inicio
     centro_x = detectar_centro_rosto(video_path, inicio, fim)
-
-    ass_path = os.path.join(WORK_DIR, f"legenda_{indice:02d}.ass")
-    gerar_ass_estilo_realoficial(janela["segmentos"], inicio, ass_path)
 
     nome_arquivo = f"clipe_{indice:02d}.mp4"
     saida = os.path.join(pasta_saida, nome_arquivo)
 
     # 720x1280 em vez de 1080x1920: menos memoria pro encoder,
     # ainda fica nitido o suficiente pra reels/shorts/tiktok
-    crop_filter = (
-        f"crop=ih*9/16:ih:(iw-ih*9/16)*{centro_x}:0,"
-        f"scale=720:1280,"
-        f"ass={ass_path}"
-    )
+    crop_filter = f"crop=ih*9/16:ih:(iw-ih*9/16)*{centro_x}:0,scale=720:1280"
+
+    if com_legenda:
+        ass_path = os.path.join(WORK_DIR, f"legenda_{indice:02d}.ass")
+        gerar_ass_estilo_realoficial(janela["segmentos"], inicio, ass_path)
+        crop_filter += f",ass={ass_path}"
 
     # libera qualquer coisa que a deteccao de rosto (opencv/numpy)
     # ainda esteja segurando na RAM antes de chamar o ffmpeg
@@ -313,16 +331,16 @@ def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, past
     return nome_arquivo
 
 
-def processar_video(url: str, pasta_saida: str) -> list[dict]:
+def processar_video(url: str, pasta_saida: str, com_legenda: bool = True) -> list[dict]:
     """
     Funcao principal chamada pelo backend do site pra link do YouTube.
     Retorna uma lista de dicts com info de cada clipe gerado.
     """
     video_path = baixar_video(url)
-    return processar_video_local(video_path, pasta_saida)
+    return processar_video_local(video_path, pasta_saida, com_legenda)
 
 
-def processar_video_local(video_path: str, pasta_saida: str) -> list[dict]:
+def processar_video_local(video_path: str, pasta_saida: str, com_legenda: bool = True) -> list[dict]:
     """
     Mesma logica de processar_video, mas a partir de um arquivo de
     video que ja esta em disco (ex: enviado por upload), sem passar
@@ -336,7 +354,7 @@ def processar_video_local(video_path: str, pasta_saida: str) -> list[dict]:
 
     resultado = []
     for i, janela in enumerate(janelas, start=1):
-        nome_arquivo = cortar_reenquadrar_legendar(video_path, janela, i, pasta_saida)
+        nome_arquivo = cortar_reenquadrar_legendar(video_path, janela, i, pasta_saida, com_legenda)
         legenda_pronta = gerar_legenda_pronta(janela["texto"])
         resultado.append({
             "arquivo": nome_arquivo,
