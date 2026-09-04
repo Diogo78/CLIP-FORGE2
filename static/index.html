@@ -110,6 +110,30 @@
   .clip-row .why{color:var(--text-dim);font-size:12px;}
   .clip-row .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);}
 
+  .clip-block{
+    border-bottom:1px solid var(--border);
+    padding:12px 0;
+  }
+  .clip-block:last-child{border-bottom:none;}
+
+  .legenda-pronta{
+    background:var(--surface2);border:1px solid var(--green-dim);
+    border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;
+  }
+  .legenda-pronta .hook{font-weight:700;color:var(--text);margin-bottom:4px;}
+  .legenda-pronta .cta{color:var(--text-dim);margin-bottom:6px;}
+  .legenda-pronta .tags{
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--green);
+    margin-bottom:8px;
+  }
+  .btn-copiar{
+    background:none;border:1px solid var(--green-dim);color:var(--green);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    border-radius:6px;padding:5px 10px;cursor:pointer;
+  }
+  .btn-copiar:hover{background:rgba(61,220,132,0.08);}
+  .btn-copiar.copiado{border-color:var(--green);color:var(--text);}
+
   .note{font-size:12px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
 </style>
 </head>
@@ -307,17 +331,47 @@
 
   function aguardar(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
+  let contadorCopiar = 0;
+
   function renderizarClipRows(container,clipes){
     container.innerHTML='';
     clipes.forEach(c=>{
-      const row=document.createElement('div');
-      row.className='clip-row';
-      row.innerHTML=
-        '<div><div class="t">'+formatarTempo(c.inicio)+' — '+formatarTempo(c.fim)+'</div>'+
-        '<div class="why">'+c.trecho_falado+'</div></div>'+
-        '<div style="text-align:right;"><div class="tag">score '+c.score+'</div>'+
-        '<a href="'+c.url_download+'" download style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--green);">baixar</a></div>';
-      container.appendChild(row);
+      contadorCopiar+=1;
+      const idBtn='copiar-'+contadorCopiar;
+      const hashtags=(c.hashtags||[]).join(' ');
+      const textoLegenda=[c.hook,c.cta,hashtags].filter(Boolean).join('\n\n');
+
+      const bloco=document.createElement('div');
+      bloco.className='clip-block';
+      bloco.innerHTML=
+        '<div class="clip-row" style="border-bottom:none;padding:0;">'+
+          '<div><div class="t">'+formatarTempo(c.inicio)+' — '+formatarTempo(c.fim)+'</div>'+
+          '<div class="why">'+c.trecho_falado+'</div></div>'+
+          '<div style="text-align:right;"><div class="tag">score '+c.score+'</div>'+
+          '<a href="'+c.url_download+'" download style="font-family:JetBrains Mono,monospace;font-size:11px;color:var(--green);">baixar</a></div>'+
+        '</div>'+
+        (c.hook ? (
+          '<div class="legenda-pronta">'+
+            '<div class="hook">'+c.hook+'</div>'+
+            '<div class="cta">'+c.cta+'</div>'+
+            '<div class="tags">'+hashtags+'</div>'+
+            '<button class="btn-copiar" id="'+idBtn+'" type="button">copiar legenda</button>'+
+          '</div>'
+        ) : '');
+      container.appendChild(bloco);
+
+      if(c.hook){
+        document.getElementById(idBtn).addEventListener('click',async(e)=>{
+          try{
+            await navigator.clipboard.writeText(textoLegenda);
+            e.target.textContent='copiado ✓';
+            e.target.classList.add('copiado');
+            setTimeout(()=>{ e.target.textContent='copiar legenda'; e.target.classList.remove('copiado'); },2000);
+          }catch(err){
+            e.target.textContent='erro ao copiar';
+          }
+        });
+      }
     });
   }
 

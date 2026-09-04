@@ -32,6 +32,60 @@ PALAVRAS_GATILHO = [
     "olha isso", "gente", "socorro", "mds", "kkkk", "haha",
 ]
 
+# banco de hooks por categoria -- a categoria e escolhida por
+# palavras-chave encontradas no texto REAL transcrito do clipe
+HOOKS_POR_CATEGORIA = {
+    "risada": [
+        "ninguem estava pronto pra isso",
+        "eu ri igual um retardado",
+        "olha a cara de quem assistiu",
+    ],
+    "choque": [
+        "ninguem esperava essa reviravolta",
+        "isso nao devia ter acontecido",
+        "presta atencao no final",
+    ],
+    "reacao": [
+        "a reacao fala tudo",
+        "olha a cara nessa hora",
+        "ninguem segurou a risada",
+    ],
+    "generico": [
+        "voce precisa ver isso ate o final",
+        "ninguem tava esperando essa",
+        "isso aqui viralizou por um motivo",
+    ],
+}
+
+HASHTAGS_PADRAO = ["#cortes", "#viral", "#fyp", "#clipes", "#foryou"]
+
+
+def gerar_legenda_pronta(texto: str) -> dict:
+    """
+    Gera hook, cta e hashtags sugeridos a partir do texto REAL
+    transcrito do clipe (nao e mais simulado) -- pra deixar o clipe
+    pronto pra postar, so copiar e colar.
+    """
+    t = texto.lower()
+
+    if any(p in t for p in ["kkkk", "haha", "rindo", "morri"]):
+        categoria = "risada"
+    elif any(p in t for p in ["nao acredito", "não acredito", "meu deus", "insano", "absurdo"]):
+        categoria = "choque"
+    elif any(p in t for p in ["olha isso", "olha a cara", "reacao", "reação"]):
+        categoria = "reacao"
+    else:
+        categoria = "generico"
+
+    hooks = HOOKS_POR_CATEGORIA[categoria]
+
+    return {
+        "hook": hooks[0],
+        "cta": "segue pra ver mais clipe assim",
+        "hashtags": HASHTAGS_PADRAO,
+    }
+
+
 _modelo_whisper = None
 
 
@@ -283,11 +337,15 @@ def processar_video_local(video_path: str, pasta_saida: str) -> list[dict]:
     resultado = []
     for i, janela in enumerate(janelas, start=1):
         nome_arquivo = cortar_reenquadrar_legendar(video_path, janela, i, pasta_saida)
+        legenda_pronta = gerar_legenda_pronta(janela["texto"])
         resultado.append({
             "arquivo": nome_arquivo,
             "inicio": round(janela["start"], 1),
             "fim": round(janela["end"], 1),
             "score": round(janela["score"], 1),
             "trecho_falado": janela["texto"][:140],
+            "hook": legenda_pronta["hook"],
+            "cta": legenda_pronta["cta"],
+            "hashtags": legenda_pronta["hashtags"],
         })
     return resultado
