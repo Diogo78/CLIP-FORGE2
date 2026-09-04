@@ -5,6 +5,7 @@ Mesma logica do clip_cutter_pro.py, organizada em funcoes pra ser
 chamada pelo backend do site (app.py) em vez de rodar por linha de comando.
 """
 
+import gc
 import os
 import subprocess
 
@@ -37,7 +38,9 @@ _modelo_whisper = None
 def _get_modelo():
     global _modelo_whisper
     if _modelo_whisper is None:
-        _modelo_whisper = WhisperModel("small", device="cpu", compute_type="int8")
+        # "tiny" usa bem menos RAM que "small" (~300MB vs ~1GB+),
+        # troque para "base" ou "small" se tiver mais memoria disponivel
+        _modelo_whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
     return _modelo_whisper
 
 
@@ -46,11 +49,14 @@ def baixar_video(url: str) -> str:
     saida = os.path.join(WORK_DIR, "video.mp4")
     comando = [
         "yt-dlp",
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
         "--merge-output-format", "mp4",
         "--extractor-args", "youtube:player_client=android,web",
         "-o", saida,
     ]
+    proxy_url = os.environ.get("PROXY_URL")
+    if proxy_url:
+        comando += ["--proxy", proxy_url]
     if os.path.exists("cookies.txt"):
         comando += ["--cookies", "cookies.txt"]
     comando.append(url)
@@ -62,12 +68,21 @@ def baixar_video(url: str) -> str:
 
 
 def transcrever(video_path: str):
+    global _modelo_whisper
     modelo = _get_modelo()
     segmentos, _ = modelo.transcribe(video_path, language="pt", vad_filter=True, word_timestamps=True)
     resultado = []
     for s in segmentos:
         palavras = [{"start": w.start, "end": w.end, "word": w.word} for w in (s.words or [])]
         resultado.append({"start": s.start, "end": s.end, "text": s.text.strip(), "words": palavras})
+
+    # libera o modelo Whisper da RAM assim que a transcricao termina —
+    # ele so volta a ser carregado no proximo job (custa um pouco de
+    # tempo, mas no plano free a RAM e mais critica que a velocidade)
+    del modelo
+    _modelo_whisper = None
+    gc.collect()
+
     return resultado
 
 
@@ -237,12 +252,21 @@ def cortar_reenquadrar_legendar(video_path: str, janela: dict, indice: int, past
 
 def processar_video(url: str, pasta_saida: str) -> list[dict]:
     """
-    Funcao principal chamada pelo backend do site.
+    Funcao principal chamada pelo backend do site pra link do YouTube.
     Retorna uma lista de dicts com info de cada clipe gerado.
+    """
+    video_path = baixar_video(url)
+    return processar_video_local(video_path, pasta_saida)
+
+
+def processar_video_local(video_path: str, pasta_saida: str) -> list[dict]:
+    """
+    Mesma logica de processar_video, mas a partir de um arquivo de
+    video que ja esta em disco (ex: enviado por upload), sem passar
+    pelo yt-dlp.
     """
     os.makedirs(pasta_saida, exist_ok=True)
 
-    video_path = baixar_video(url)
     segmentos = transcrever(video_path)
     janelas = selecionar_janelas(segmentos)
 

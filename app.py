@@ -23,25 +23,33 @@ USO:
 """
 
 import os
+import shutil
 import threading
 import traceback
 import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from pipeline import processar_video
+from pipeline import processar_video, processar_video_local
 
 CLIPES_DIR = "clipes"
+UPLOADS_DIR = "uploads"
 os.makedirs(CLIPES_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 app = FastAPI(title="CLIPE FORGE")
 app.mount("/clipes", StaticFiles(directory=CLIPES_DIR), name="clipes")
 
 # guarda o status de cada job em memoria: {job_id: {"status":..., "clipes":..., "erro":...}}
 JOBS: dict[str, dict] = {}
+
+# no plano free (pouca RAM), rodar 2 jobs ao mesmo tempo derruba o
+# container por falta de memoria -- esse lock garante que só um
+# video seja processado por vez; os outros ficam esperando na fila
+LOCK_PROCESSAMENTO = threading.Lock()
 
 
 class CortarRequest(BaseModel):
@@ -55,18 +63,37 @@ def home():
 
 def _rodar_pipeline_em_segundo_plano(job_id: str, url: str):
     pasta_lote = os.path.join(CLIPES_DIR, job_id)
-    try:
-        clipes = processar_video(url, pasta_lote)
-        for c in clipes:
-            c["url_download"] = f"/clipes/{job_id}/{c['arquivo']}"
-        JOBS[job_id] = {"status": "concluido", "clipes": clipes}
-    except Exception:
-        JOBS[job_id] = {"status": "erro", "erro": traceback.format_exc(limit=3)}
+    with LOCK_PROCESSAMENTO:
+        try:
+            clipes = processar_video(url, pasta_lote)
+            for c in clipes:
+                c["url_download"] = f"/clipes/{job_id}/{c['arquivo']}"
+            JOBS[job_id] = {"status": "concluido", "clipes": clipes}
+        except Exception:
+            JOBS[job_id] = {"status": "erro", "erro": traceback.format_exc(limit=3)}
+
+
+def _rodar_pipeline_local_em_segundo_plano(job_id: str, video_path: str):
+    pasta_lote = os.path.join(CLIPES_DIR, job_id)
+    with LOCK_PROCESSAMENTO:
+        try:
+            clipes = processar_video_local(video_path, pasta_lote)
+            for c in clipes:
+                c["url_download"] = f"/clipes/{job_id}/{c['arquivo']}"
+            JOBS[job_id] = {"status": "concluido", "clipes": clipes}
+        except Exception:
+            JOBS[job_id] = {"status": "erro", "erro": traceback.format_exc(limit=3)}
+        finally:
+            # limpa o arquivo enviado depois de processar
+            try:
+                os.remove(video_path)
+            except OSError:
+                pass
 
 
 @app.post("/api/cortar")
 def cortar(req: CortarRequest):
-    """Dispara o processamento em segundo plano e devolve um job_id na hora."""
+    """Dispara o processamento em segundo plano a partir de um link e devolve um job_id na hora."""
     if not req.url.strip():
         raise HTTPException(status_code=400, detail="envie um link valido")
 
@@ -76,6 +103,31 @@ def cortar(req: CortarRequest):
     thread = threading.Thread(
         target=_rodar_pipeline_em_segundo_plano,
         args=(job_id, req.url.strip()),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"job_id": job_id}
+
+
+@app.post("/api/cortar-upload")
+async def cortar_upload(arquivo: UploadFile = File(...)):
+    """Dispara o processamento em segundo plano a partir de um arquivo de video enviado direto."""
+    extensoes_validas = (".mp4", ".mov", ".mkv", ".avi", ".webm")
+    if not arquivo.filename.lower().endswith(extensoes_validas):
+        raise HTTPException(status_code=400, detail="formato de arquivo nao suportado")
+
+    job_id = uuid.uuid4().hex[:8]
+    caminho_upload = os.path.join(UPLOADS_DIR, f"{job_id}_{arquivo.filename}")
+
+    with open(caminho_upload, "wb") as f:
+        shutil.copyfileobj(arquivo.file, f)
+
+    JOBS[job_id] = {"status": "processando"}
+
+    thread = threading.Thread(
+        target=_rodar_pipeline_local_em_segundo_plano,
+        args=(job_id, caminho_upload),
         daemon=True,
     )
     thread.start()
