@@ -64,7 +64,10 @@ def home():
 
 def _rodar_pipeline_em_segundo_plano(job_id: str, url: str, com_legenda: bool):
     pasta_lote = os.path.join(CLIPES_DIR, job_id)
+    if LOCK_PROCESSAMENTO.locked():
+        JOBS[job_id] = {"status": "na_fila"}
     with LOCK_PROCESSAMENTO:
+        JOBS[job_id] = {"status": "processando"}
         try:
             clipes = processar_video(url, pasta_lote, com_legenda)
             for c in clipes:
@@ -76,7 +79,10 @@ def _rodar_pipeline_em_segundo_plano(job_id: str, url: str, com_legenda: bool):
 
 def _rodar_pipeline_local_em_segundo_plano(job_id: str, video_path: str, com_legenda: bool):
     pasta_lote = os.path.join(CLIPES_DIR, job_id)
+    if LOCK_PROCESSAMENTO.locked():
+        JOBS[job_id] = {"status": "na_fila"}
     with LOCK_PROCESSAMENTO:
+        JOBS[job_id] = {"status": "processando"}
         try:
             clipes = processar_video_local(video_path, pasta_lote, com_legenda)
             for c in clipes:

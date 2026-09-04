@@ -208,8 +208,21 @@ def selecionar_janelas(segmentos):
     return escolhidas
 
 
+_cascade_rosto = None
+
+
+def _get_cascade():
+    # carrega o classificador de rosto uma unica vez por processo em vez
+    # de recriar a cada clipe -- o arquivo e pequeno, mas recriar
+    # repetidamente ainda gera alocacao/desalocacao desnecessaria
+    global _cascade_rosto
+    if _cascade_rosto is None:
+        _cascade_rosto = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    return _cascade_rosto
+
+
 def detectar_centro_rosto(video_path: str, inicio: float, fim: float) -> float:
-    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cascade = _get_cascade()
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     largura = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -340,6 +353,54 @@ def processar_video(url: str, pasta_saida: str, com_legenda: bool = True) -> lis
     return processar_video_local(video_path, pasta_saida, com_legenda)
 
 
+def _obter_altura_video(video_path: str) -> int | None:
+    resultado = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=height",
+            "-of", "csv=p=0",
+            video_path,
+        ],
+        capture_output=True, text=True,
+    )
+    try:
+        return int(resultado.stdout.strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def garantir_resolucao_maxima(video_path: str, altura_max: int = 720) -> str:
+    """
+    Uploads diretos (ex: gravacao de OBS) podem vir em 1080p/4K.
+    Decodificar frame em resolucao alta -- tanto pro opencv detectar
+    rosto quanto pro ffmpeg cortar depois -- consome bem mais RAM.
+    Reduz pra altura_max ANTES de qualquer outra etapa, do mesmo jeito
+    que os links do YouTube ja chegam limitados a 720p pelo yt-dlp.
+    """
+    altura = _obter_altura_video(video_path)
+    if altura is None or altura <= altura_max:
+        return video_path
+
+    saida = os.path.join(WORK_DIR, "video_reduzido.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-vf", f"scale=-2:{altura_max}",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-threads", "1",
+            "-c:a", "copy",
+            saida,
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return saida
+
+
 def processar_video_local(video_path: str, pasta_saida: str, com_legenda: bool = True) -> list[dict]:
     """
     Mesma logica de processar_video, mas a partir de um arquivo de
@@ -349,6 +410,7 @@ def processar_video_local(video_path: str, pasta_saida: str, com_legenda: bool =
     os.makedirs(pasta_saida, exist_ok=True)
     os.makedirs(WORK_DIR, exist_ok=True)
 
+    video_path = garantir_resolucao_maxima(video_path)
     segmentos = transcrever(video_path)
     janelas = selecionar_janelas(segmentos)
 
